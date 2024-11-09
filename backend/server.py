@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 import httpx
 import io
@@ -13,6 +13,7 @@ import numpy as np
 import logging
 from functools import lru_cache
 from pathlib import Path
+import threading
 
 # Load environment variables
 load_dotenv()
@@ -77,7 +78,7 @@ async def process_image(object_name: str) -> None:
     """Process the image generation and 3D conversion pipeline."""
     try:
         # Generate image
-        prompt = f"a {object_name} against a plain gray background presented at slight angle to emphasize the depth of each layer and make it look like a 3d asset"
+        prompt = f"a {object_name} against a plain gray background presented at slight angle to make it look like a 3d asset"
         image_bytes = await query({"inputs": prompt})
         
         # Save initial image
@@ -104,18 +105,18 @@ async def convert_to_3d(image_path: Path, object_name: str) -> None:
         image = Image.open(image_path).convert("RGB")
         image = remove_background(image)
         image = resize_foreground(image, 0.85)
+        logger.info("image turning to 3d!!")
         
         # Convert to numpy array and normalize
         image = np.array(image).astype(np.float32) / 255.0
         image = image[:, :, :3] * image[:, :, 3:4] + (1 - image[:, :, 3:4]) * 0.5
         image = Image.fromarray((image * 255.0).astype(np.uint8))
+        logger.info("image being extrated to mesh!!")
 
-        # Generate 3D mesh
         with torch.no_grad():
             scene_codes = model([image], device=device)
         meshes = model.extract_mesh(scene_codes, has_vertex_color=True, resolution=256)
         
-        # Save mesh with same name as the PNG
         mesh_path = OUTPUT_DIR / f"{object_name}.obj"
         meshes[0].export(str(mesh_path))
         logger.info(f"Saved 3D model to {mesh_path}")
@@ -124,14 +125,21 @@ async def convert_to_3d(image_path: Path, object_name: str) -> None:
         logger.error(f"Error in 3D conversion: {str(e)}")
         raise
 
+def run_in_thread(object_name: str) -> None:
+    """Run the process_image function in a separate thread."""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(process_image(object_name))
+    loop.close()
+
 @app.get("/generate/{object_name}")
-async def text_to_image(object_name: str, background_tasks: BackgroundTasks) -> JSONResponse:
+async def text_to_image(object_name: str) -> JSONResponse:
     """
     Generate a 3D model from a text description.
     
     Args:
         object_name: Name of the object to generate
-        background_tasks: FastAPI background tasks handler
     
     Returns:
         JSONResponse with status message
@@ -141,8 +149,9 @@ async def text_to_image(object_name: str, background_tasks: BackgroundTasks) -> 
         if not object_name.strip():
             raise HTTPException(status_code=400, detail="Object name cannot be empty")
         
-        # Add task to background
-        background_tasks.add_task(process_image, object_name)
+        # Start a new thread for processing
+        thread = threading.Thread(target=run_in_thread, args=(object_name,))
+        thread.start()
         
         return JSONResponse(
             status_code=202,
