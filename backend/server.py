@@ -4,7 +4,6 @@ import httpx
 import io
 from PIL import Image
 import os
-from typing import Optional
 from dotenv import load_dotenv
 import torch
 from tsr.system import TSR
@@ -14,11 +13,10 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 import threading
+import asyncio
 
-# Load environment variables
 load_dotenv()
 
-# Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -27,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="3D Model Generator API")
 
-# Constants
 API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-dev"
 FLUX_API_KEY = os.getenv('FLUX_API')
 if not FLUX_API_KEY:
@@ -63,7 +60,7 @@ async def query(payload: dict) -> bytes:
                 API_URL,
                 headers=headers,
                 json=payload,
-                timeout=30.0
+                timeout=5.0
             )
             response.raise_for_status()
             return response.content
@@ -127,7 +124,6 @@ async def convert_to_3d(image_path: Path, object_name: str) -> None:
 
 def run_in_thread(object_name: str) -> None:
     """Run the process_image function in a separate thread."""
-    import asyncio
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(process_image(object_name))
