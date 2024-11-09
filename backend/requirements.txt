@@ -1,0 +1,8 @@
+fastapi[standard]>=0.112.0,<0.113.0
+requests
+Pillow
+python-dotenv
+torch
+numpy
+uvicorn
+python-multipart
