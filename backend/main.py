@@ -231,7 +231,7 @@ async def generate_model(
         obj_file_path = f"{object_dir}/{object_name}.obj"
         ms = pymeshlab.MeshSet()
         ms.load_new_mesh(temp_obj_file_path)
-        ms.meshing_decimation_quadric_edge_collapse(targetfacenum=10000)
+        ms.meshing_decimation_quadric_edge_collapse(targetfacenum=8000)
         ms.save_current_mesh(obj_file_path)
 
         logging.info("3d model smoothened!!!")
