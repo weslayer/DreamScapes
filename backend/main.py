@@ -124,7 +124,7 @@ class ModelService:
         )
 
         # Save mesh and texture
-        mesh_path = job_dir / f"{object_name}.{model_format}"
+        mesh_path = job_dir / f"temp_{object_name}.{model_format}"
         if bake_texture:
             texture_path = job_dir / f"{object_name}.png"
             bake_output = bake_texture(
@@ -223,7 +223,19 @@ async def generate_model(
             remove_bg,
         )
 
-        obj_file_path = result["mesh_path"]
+        logging.info("3D model generated!!!")
+
+        import pymeshlab
+
+        temp_obj_file_path = result["mesh_path"]
+        obj_file_path = f"{object_dir}/{object_name}.obj"
+        ms = pymeshlab.MeshSet()
+        ms.load_new_mesh(temp_obj_file_path)
+        ms.meshing_decimation_quadric_edge_collapse(targetfacenum=10000)
+        ms.save_current_mesh(obj_file_path)
+
+        logging.info("3d model smoothened!!!")
+
         with open(obj_file_path, "rb") as f:
             try:
                 BLOB_STORAGE.upload_fileobj(f, S3_BUCKET_NAME, obj_file_path)
@@ -239,7 +251,7 @@ async def generate_model(
         # url = CACHE_SERVER.post(result["mesh_path"], embedding)
 
         return FileResponse(
-            result["mesh_path"],
+            obj_file_path,
             filename=f"{object_name}.obj",
         )
 
