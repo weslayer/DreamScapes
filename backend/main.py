@@ -1,5 +1,5 @@
 # main.py
-from cache_utils import CacheServer
+# from cache_utils import CacheServer
 from io import BytesIO
 import random
 import logging
@@ -22,6 +22,7 @@ from tsr.system import TSR
 from tsr.utils import remove_background, resize_foreground, save_video
 from tsr.bake_texture import bake_texture
 from dotenv import load_dotenv
+import boto3
 
 load_dotenv()
 
@@ -34,8 +35,10 @@ app = FastAPI(title="3D Model Generation API")
 
 API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
 headers = {"Authorization": f"Bearer {os.getenv('FLUX_API2')}"}
-CACHE_SERVER = CacheServer()
+# CACHE_SERVER = CacheServer()
 
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "dreamscapeassetbucket")
+BLOB_STORAGE = boto3.client("s3")
 
 def query(keyword):
     payload = {
@@ -80,11 +83,10 @@ class ModelService:
         self,
         image: Image.Image,
         object_name: str,
-        job_id: str,
         foreground_ratio: float = 0.85,
-        mc_resolution: int = 256,
+        mc_resolution: int = 192,
         bake_texture: bool = False,
-        texture_resolution: int = 2048,
+        texture_resolution: int = 0,
         render_video: bool = False,
         model_format: str = "obj",
         remove_bg: bool = True,
@@ -117,7 +119,7 @@ class ModelService:
 
         # Extract mesh
         meshes = self.model.extract_mesh(
-            scene_codes, not bake_texture, resolution=mc_resolution
+            scene_codes, bake_texture, resolution=mc_resolution
         )
 
         # Save mesh and texture
@@ -166,29 +168,31 @@ async def startup_event():
 @app.get("/generate/{object_name}")
 async def generate_model(
     object_name: str,
-    # image: UploadFile = File(...),
-    job_id: Optional[str] = None,
     foreground_ratio: float = 0.85,
-    mc_resolution: int = 256,
+    mc_resolution: int = 192,
     bake_texture: bool = False,
-    texture_resolution: int = 2048,
+    texture_resolution: int = 0,
     render_video: bool = False,
     model_format: str = "obj",
     remove_bg: bool = True,
 ):
-    embedding = CACHE_SERVER.getEmbedding(object_name)
-    print("--------------EMBEDDING--------------")
-    print(embedding)
+    # embedding = CACHE_SERVER.getEmbedding(object_name)
+    # print("--------------EMBEDDING--------------")
+    # print(embedding)
 
-    cacheRes = CACHE_SERVER.get(embedding, object_name)
-    print("--------------CACHERES--------------")
-    print(cacheRes)
+    # cacheRes = CACHE_SERVER.get(embedding, object_name)
+    # print("--------------CACHERES--------------")
+    # print(cacheRes)
 
-    if cacheRes:
-        return FileResponse(cacheRes, media_type="application/octet-stream")
+    # if cacheRes:
+    #     return FileResponse(cacheRes, media_type="application/octet-stream")
+    output_dir = "output/"
+    object_dir = os.path.join(output_dir, object_name)
 
-    if not job_id:
-        job_id = str(random.randint(100000, 999999))
+    # Check if folder with the object name exists
+    if os.path.isdir(object_dir):
+        return f"{object_dir}/{object_name}.obj"
+
     try:
         # Read and convert image
         image_bytes = query(object_name)
@@ -207,7 +211,6 @@ async def generate_model(
         result = await model_service.process_image(
             pil_image,
             object_name,
-            job_id,
             foreground_ratio,
             mc_resolution,
             bake_texture,
@@ -217,7 +220,20 @@ async def generate_model(
             remove_bg,
         )
 
-        url = CACHE_SERVER.post(result["mesh_path"], embedding)
+        obj_file_path = result["mesh_path"]
+        with open(obj_file_path, "rb") as f:
+            try:
+                BLOB_STORAGE.upload_fileobj(f, S3_BUCKET_NAME, obj_file_path)
+
+            except Exception as e:
+                print(f"Error uploading file to S3: {e}")
+                return None
+
+        url = (
+            f"https://dreamscapeassetbucket.s3.us-west-1.amazonaws.com/{obj_file_path}"
+        )
+        print("Uploaded file to S3.")
+        # url = CACHE_SERVER.post(result["mesh_path"], embedding)
 
         return FileResponse(
             result["mesh_path"],
