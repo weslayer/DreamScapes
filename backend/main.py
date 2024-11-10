@@ -40,6 +40,7 @@ headers = {"Authorization": f"Bearer {os.getenv('FLUX_API2')}"}
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "dreamscapeassetbucket")
 BLOB_STORAGE = boto3.client("s3")
 
+
 def query(keyword):
     payload = {
         "inputs": f"a {keyword} against a plain gray background presented at slight angle to make it look like a 3d asset",
@@ -84,7 +85,7 @@ class ModelService:
         image: Image.Image,
         object_name: str,
         foreground_ratio: float = 0.85,
-        mc_resolution: int = 192,
+        mc_resolution: int = 256,
         bake_texture: bool = False,
         texture_resolution: int = 0,
         render_video: bool = False,
@@ -169,7 +170,7 @@ async def startup_event():
 async def generate_model(
     object_name: str,
     foreground_ratio: float = 0.85,
-    mc_resolution: int = 192,
+    mc_resolution: int = 256,
     bake_texture: bool = False,
     texture_resolution: int = 0,
     render_video: bool = False,
@@ -191,8 +192,10 @@ async def generate_model(
 
     # Check if folder with the object name exists
     if os.path.isdir(object_dir):
-        return f"{object_dir}/{object_name}.obj"
-
+        return FileResponse(
+            f"{object_dir}/{object_name}.obj",
+            filename=f"{object_name}.obj",
+        )
     try:
         # Read and convert image
         image_bytes = query(object_name)
