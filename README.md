@@ -14,4 +14,4 @@ Combining AI and VR to bring generative AI capabilities to VR.
 - FLUX.1: 2d Image Generation
 - TripoSR: Large Reconstruction Model
 - Perplexity AI: helps us find tutorials and debug
-- ChatGPT: Logo generation
+- ChatGPT: Logo generation 
