@@ -14,7 +14,8 @@ load_dotenv()
 
 class CacheServer:
     def __init__(self):
-        self.S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "dreamscapeassetbucket")
+        # Get bucket name from Pulumi stack output
+        self.S3_BUCKET_NAME = os.getenv("PULUMI_BUCKET_NAME", "dreamscapeassetbucket")
         # self.REDIS_USER = os.getenv("REDIS_USER", "empty")
         # self.REDIS_PASS = os.getenv("REDIS_PASSWORD", "empty")
         # self.REDIS_HOST = os.getenv("REDIS_HOST", "empty")

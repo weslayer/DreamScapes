@@ -1,0 +1,3 @@
+# Pulumi
+.pulumi/
+Pulumi.*.yaml 
